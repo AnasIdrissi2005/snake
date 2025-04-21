@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>لعبة الثعبان</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 10px;
+            direction: rtl;
+            touch-action: none;
+            overflow: hidden;
+        }
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        #game-container {
+            position: relative;
+            margin-bottom: 10px;
+            touch-action: none;
+        }
+        canvas {
+            border: 3px solid #4CAF50;
+            background-color: #000;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+            max-width: 100%;
+            max-height: 60vh;
+        }
+        .info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 10px;
+        }
+        .score, .high-score {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .controls {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        .touch-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 5px;
+            width: 100%;
+            max-width: 300px;
+            margin: 10px auto;
+        }
+        .touch-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 15px 0;
+            font-size: 18px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .touch-btn:active {
+            background-color: #45a049;
+        }
+        .touch-btn.up {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        .touch-btn.left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        .touch-btn.right {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        .touch-btn.down {
+            grid-column: 2;
+            grid-row: 3;
+        }
+        .touch-btn.pause {
+            grid-column: 2;
+            grid-row: 2;
+            background-color: #FFC107;
+        }
+        .touch-btn.pause:active {
+            background-color: #FFA000;
+        }
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            width: 80%;
+            max-width: 300px;
+        }
+        .game-over h2 {
+            color: #ff5252;
+            margin-top: 0;
+        }
+        .game-over button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .game-over button:hover, .game-over button:active {
+            background-color: #45a049;
+        }
+        .swipe-hint {
+            margin-top: 10px;
+            font-size: 14px;
+            text-align: center;
+            color: #AAA;
+        }
+        @media (max-width: 500px) {
+            h1 {
+                font-size: 20px;
+                margin-top: 10px;
+            }
+            .controls p {
+                font-size: 14px;
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>لعبة الثعبان التقليدية</h1>
+    <div class="info">
+        <div class="score">النقاط: <span id="score">0</span></div>
+        <div class="high-score">أعلى نتيجة: <span id="high-score">0</span></div>
+    </div>
+    <div id="game-container">
+        <canvas id="game" width="400" height="400"></canvas>
+        <div class="game-over" id="game-over">
+            <h2>انتهت اللعبة!</h2>
+            <p>النقاط: <span id="final-score">0</span></p>
+            <button id="restart">العب مرة أخرى</button>
+        </div>
+    </div>
+    <div class="controls">
+        <p>استخدم أزرار الأسهم أو السحب للتحكم</p>
+        <p>عند وصول الثعبان للجدار سيمر للجهة الأخرى</p>
+        <div class="touch-controls">
+            <button class="touch-btn up">↑</button>
+            <button class="touch-btn left">←</button>
+            <button class="touch-btn pause">II</button>
+            <button class="touch-btn right">→</button>
+            <button class="touch-btn down">↓</button>
+        </div>
+        <div class="swipe-hint">يمكنك أيضًا استخدام السحب في أي اتجاه</div>
+    </div>
+
+    <script>
+        // إعداد الكانفاس
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        
+        // تعديل حجم الكانفاس ليناسب الشاشة
+        const resizeCanvas = () => {
+            const maxSize = Math.min(window.innerWidth - 20, 400);
+            canvas.style.width = `${maxSize}px`;
+            canvas.style.height = `${maxSize}px`;
+        };
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // حجم المربع
+        const box = 20;
+        
+        // عدد المربعات في الشبكة
+        const gridSize = 20;
+        
+        // تعريف الثعبان الأولي
+        let snake = [];
+        snake[0] = { x: 10 * box, y: 10 * box };
+        
+        // الطعام
+        let food = {
+            x: Math.floor(Math.random() * gridSize) * box,
+            y: Math.floor(Math.random() * gridSize) * box
+        };
+        
+        // المتغيرات
+        let score = 0;
+        let highScore = localStorage.getItem('snakeHighScore') || 0;
+        let direction;
+        let game;
+        let speed = 150;
+        let isPaused = false;
+        let isGameOver = false;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        // تحديث النتيجة العالية
+        document.getElementById('high-score').textContent = highScore;
+        
+        // إضافة حدث ضغط المفاتيح
+        document.addEventListener('keydown', handleKeyPress);
+        document.getElementById('restart').addEventListener('click', restartGame);
+        
+        // أحداث أزرار اللمس
+        document.querySelector('.touch-btn.up').addEventListener('click', () => setDirection('UP'));
+        document.querySelector('.touch-btn.down').addEventListener('click', () => setDirection('DOWN'));
+        document.querySelector('.touch-btn.left').addEventListener('click', () => setDirection('LEFT'));
+        document.querySelector('.touch-btn.right').addEventListener('click', () => setDirection('RIGHT'));
+        document.querySelector('.touch-btn.pause').addEventListener('click', togglePause);
+        
+        // إضافة أحداث السحب
+        canvas.addEventListener('touchstart', handleTouchStart, false);
+        canvas.addEventListener('touchmove', handleTouchMove, false);
+        
+        // بدء اللعبة
+        createFood();
+        game = setInterval(draw, speed);
+        
+        // التعامل مع الضغط على المفاتيح
+        function handleKeyPress(event) {
+            if (event.keyCode === 32) { // مسافة
+                togglePause();
+                return;
+            }
+            
+            if (isPaused) return;
+            
+            const LEFT_KEY = 37;
+            const UP_KEY = 38;
+            const RIGHT_KEY = 39;
+            const DOWN_KEY = 40;
+            
+            const keyPressed = event.keyCode;
+            
+            if (keyPressed === LEFT_KEY) {
+                setDirection('LEFT');
+            }
+            if (keyPressed === UP_KEY) {
+                setDirection('UP');
+            }
+            if (keyPressed === RIGHT_KEY) {
+                setDirection('RIGHT');
+            }
+            if (keyPressed === DOWN_KEY) {
+                setDirection('DOWN');
+            }
+        }
+        
+        // تعيين الاتجاه
+        function setDirection(newDirection) {
+            if (isPaused) return;
+            
+            const goingUp = direction === 'UP';
+            const goingDown = direction === 'DOWN';
+            const goingLeft = direction === 'LEFT';
+            const goingRight = direction === 'RIGHT';
+            
+            if (newDirection === 'LEFT' && !goingRight) {
+                direction = 'LEFT';
+            }
+            if (newDirection === 'UP' && !goingDown) {
+                direction = 'UP';
+            }
+            if (newDirection === 'RIGHT' && !goingLeft) {
+                direction = 'RIGHT';
+            }
+            if (newDirection === 'DOWN' && !goingUp) {
+                direction = 'DOWN';
+            }
+        }
+        
+        // التعامل مع بداية اللمس
+        function handleTouchStart(event) {
+            touchStartX = event.touches[0].clientX;
+            touchStartY = event.touches[0].clientY;
+            event.preventDefault();
+        }
+        
+        // التعامل مع حركة اللمس
+        function handleTouchMove(event) {
+            if (!touchStartX || !touchStartY || isPaused) {
+                return;
+            }
+            
+            const touchEndX = event.touches[0].clientX;
+            const touchEndY = event.touches[0].clientY;
+            
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            
+            // إذا كانت الحركة صغيرة جدًا، تجاهلها
+            if (Math.abs(diffX) < 20 && Math.abs(diffY) < 20) {
+                return;
+            }
+            
+            // حدد الاتجاه الرئيسي للحركة
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                // حركة أفقية
+                if (diffX > 0) {
+                    setDirection('RIGHT');
+                } else {
+                    setDirection('LEFT');
+                }
+            } else {
+                // حركة رأسية
+                if (diffY > 0) {
+                    setDirection('DOWN');
+                } else {
+                    setDirection('UP');
+                }
+            }
+            
+            // إعادة تعيين نقطة البداية
+            touchStartX = touchEndX;
+            touchStartY = touchEndY;
+            
+            event.preventDefault();
+        }
+        
+        // إنشاء طعام جديد
+        function createFood() {
+            food = {
+                x: Math.floor(Math.random() * gridSize) * box,
+                y: Math.floor(Math.random() * gridSize) * box
+            };
+            
+            // التأكد من أن الطعام لا يظهر على الثعبان
+            for (let i = 0; i < snake.length; i++) {
+                if (snake[i].x === food.x && snake[i].y === food.y) {
+                    createFood();
+                }
+            }
+        }
+        
+        // رسم الكل
+        function draw() {
+            if (isPaused) return;
+            
+            // تنظيف الكانفاس
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // رسم الثعبان
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = i === 0 ? '#4CAF50' : '#A5D6A7';
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                
+                ctx.strokeStyle = 'black';
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+            
+            // رسم الطعام
+            ctx.fillStyle = '#FF5252';
+            ctx.fillRect(food.x, food.y, box, box);
+            
+            // تخزين الموقع القديم للرأس
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+            
+            // تحريك الثعبان
+            if (direction === 'LEFT') snakeX -= box;
+            if (direction === 'UP') snakeY -= box;
+            if (direction === 'RIGHT') snakeX += box;
+            if (direction === 'DOWN') snakeY += box;
+            
+            // التأكد من المرور عبر الجدران
+            if (snakeX < 0) {
+                snakeX = (gridSize - 1) * box; // الانتقال إلى الجانب الأيمن
+            } else if (snakeX >= gridSize * box) {
+                snakeX = 0; // الانتقال إلى الجانب الأيسر
+            }
+            
+            if (snakeY < 0) {
+                snakeY = (gridSize - 1) * box; // الانتقال إلى الأسفل
+            } else if (snakeY >= gridSize * box) {
+                snakeY = 0; // الانتقال إلى الأعلى
+            }
+            
+            // أكل الطعام
+            if (snakeX === food.x && snakeY === food.y) {
+                score++;
+                document.getElementById('score').textContent = score;
+                
+                // تحديث النتيجة العالية
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('snakeHighScore', highScore);
+                    document.getElementById('high-score').textContent = highScore;
+                }
+                
+                createFood();
+                
+                // زيادة السرعة
+                if (score % 5 === 0 && speed > 60) {
+                    speed -= 10;
+                    clearInterval(game);
+                    game = setInterval(draw, speed);
+                }
+            } else {
+                // إزالة الذيل
+                snake.pop();
+            }
+            
+            // الرأس الجديدة
+            const newHead = {
+                x: snakeX,
+                y: snakeY
+            };
+            
+            // التحقق من اصطدام الثعبان بنفسه فقط
+            if (collision(newHead, snake)) {
+                gameOver();
+                return;
+            }
+            
+            // إضافة الرأس الجديدة
+            snake.unshift(newHead);
+        }
+        
+        // التحقق من اصطدام الثعبان بنفسه
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x === array[i].x && head.y === array[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // إيقاف اللعبة مؤقتًا
+        function togglePause() {
+            if (isGameOver) {
+                restartGame();
+                return;
+            }
+            
+            isPaused = !isPaused;
+        }
+        
+        // انتهاء اللعبة
+        function gameOver() {
+            clearInterval(game);
+            isGameOver = true;
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('game-over').style.display = 'block';
+        }
+        
+        // إعادة تشغيل اللعبة
+        function restartGame() {
+            clearInterval(game);
+            
+            // إعادة ضبط المتغيرات
+            snake = [];
+            snake[0] = { x: 10 * box, y: 10 * box };
+            direction = undefined;
+            score = 0;
+            speed = 150;
+            isPaused = false;
+            isGameOver = false;
+            
+            // إعادة ضبط العناصر المرئية
+            document.getElementById('score').textContent = '0';
+            document.getElementById('game-over').style.display = 'none';
+            
+            createFood();
+            game = setInterval(draw, speed);
+        }
+        
+        // منع سلوك السحب الافتراضي للمتصفح
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
